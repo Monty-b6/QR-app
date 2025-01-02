@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: #f0f0f0;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 20px;
+    }
+    .column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 10px;
+    }
+    .block {
+      min-width: 150px;
+      min-height: 50px;
+      background-color: lightgrey;
+      border: 2px solid black;
+      margin-bottom: 15px;
+      cursor: pointer;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 5px;
+      padding: 5px;
+      box-sizing: border-box;
+      white-space: nowrap;
+    }
+    .block-caption {
+      position: absolute;
+      bottom: 5px;
+      width: 100%;
+      text-align: center;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .overlay-content {
+      position: relative;
+      background-color: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      overflow-x: auto; 
+    }
+    .close-button {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: red; 
+    }
+    #qr-scanner {
+      width: 100%;
+      margin-top: 10px;
+    }
+    #video {
+      width: 100%;
+      display: none;
+    }
+    input[type="text"], input[type="password"], select {
+      width: calc(100% - 20px);
+      padding: 10px;
+      margin: 10px 0;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid black;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .spinner-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      display: none; 
+    }
+    .spinner {
+      border: 16px solid #f3f3f3;
+      border-radius: 50%;
+      border-top: 16px solid #3498db;
+      width: 120px;
+      height: 120px;
+      animation: spin 2s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .spinner-message {
+      color: white;
+      font-size: 18px;
+      margin-top: 20px;
+    }
+    #login-form {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 20px;
+    }
+    #main-content {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+    #status-container {
+      margin: 20px;
+    }
+
+    /* New styles for save overlay */
+    .save-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1001;
+    }
+
+    .save-message {
+      background-color: white;
+      padding: 20px;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      text-align: center;
+      color: #333;
+    }
+
+    /* New styles for delete button */
+    .delete-button {
+      background-color: #f44336;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    .delete-button:hover {
+      background-color: #e53935;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
+  <script>
+    let data = [];
+    let centerData = [];
+    let currentRegNumber = '';
+    let currentRowNumber = '';
+    let currentSeatNumber = '';
+    let currentBlock = null;
+    const scannedValues = new Set();
+
+    window.addEventListener('beforeunload', function (e) {
+      e.preventDefault();
+      e.returnValue = 'Are you sure you want to refresh the App?';
+      const confirmation = confirm('Are you sure you want to refresh the App?');
+      if (!confirmation) {
+        e.returnValue = false;
+      }
+    });
+
+    function loadData() {
+      google.script.run.withSuccessHandler(function(response) {
+        data = response;
+        console.log('Data loaded:', data);
+      }).getDataFromSheet();
+
+      // Load center data
+      google.script.run.withSuccessHandler(function(response) {
+        centerData = response;
+        populateCenterDropdown(centerData);
+      }).getCenterValues();
+    }
+
+    function populateCenterDropdown(centerData) {
+      const dropdown = document.getElementById('center-dropdown');
+      dropdown.innerHTML = ''; // Clear any existing options
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = 'Select Center';
+      dropdown.appendChild(defaultOption);
+
+      centerData.forEach(center => {
+        const option = document.createElement('option');
+        option.value = center;
+        option.textContent = center;
+        dropdown.appendChild(option);
+      });
+    }
+
+    let rowCount = 0;
+
+    function addRow(rowDetails = null) {
+      rowCount++;
+      const rowNumber = rowCount;
+      const column = document.createElement('div');
+      column.className = 'column';
+
+      const rowLabel = document.createElement('div');
+      rowLabel.textContent = 'Row ' + rowNumber;
+      column.appendChild(rowLabel);
+
+      const blocksContainer = document.createElement('div');
+      
+      const numberOfSeats = rowDetails ? rowDetails.seats.length : 5;
+      
+      for (let i = 0; i < numberOfSeats; i++) {
+        const seatNumber = i + 1;
+        const block = document.createElement('div');
+        block.className = 'block';
+        block.onclick = function() {
+          currentRowNumber = rowNumber;
+          currentSeatNumber = seatNumber;
+          currentBlock = block;
+          
+          if (block.style.backgroundColor === 'red') {
+            alert('You cannot make any changes for this student');
+          } else if (block.style.backgroundColor === 'rgb(144, 238, 144)' || block.style.backgroundColor === 'rgb(255, 255, 224)') {
+            showCheatingOverlay();
+          } else {
+            showOverlay();
+          }
+        };
+
+        const blockCaption = document.createElement('div');
+        blockCaption.className = 'block-caption';
+        blockCaption.textContent = 'Seat ' + seatNumber;
+        block.appendChild(blockCaption);
+
+        if (rowDetails) {
+          const seatDetails = rowDetails.seats[i];
+          block.textContent = seatDetails.text;
+          block.style.backgroundColor = seatDetails.bgColor;
+          adjustBlockSize(block);  // Adjust the block size based on content
+        }
+
+        blocksContainer.appendChild(block);
+      }
+      
+      column.appendChild(blocksContainer);
+
+      const buttonContainer = document.createElement('div');
+      buttonContainer.className = 'button-container';
+
+      const addSeatButton = document.createElement('button');
+      addSeatButton.textContent = 'Add Seat';
+      addSeatButton.onclick = function() {
+        const newSeatNumber = blocksContainer.querySelectorAll('.block').length + 1; 
+        const newBlock = document.createElement('div');
+        newBlock.className = 'block';
+        newBlock.onclick = function() {
+          currentRowNumber = rowNumber;
+          currentSeatNumber = newSeatNumber;
+          currentBlock = newBlock;
+
+          if (newBlock.style.backgroundColor === 'red') {
+            alert('You cannot make any changes for this student');
+          } else if (newBlock.style.backgroundColor === 'rgb(144, 238, 144)' || newBlock.style.backgroundColor === 'rgb(255, 255, 224)') {
+            showCheatingOverlay();
+          } else {
+            showOverlay();
+          }
+        };
+
+        const newBlockCaption = document.createElement('div');
+        newBlockCaption.className = 'block-caption';
+        newBlockCaption.textContent = 'Seat ' + newSeatNumber;
+        newBlock.appendChild(newBlockCaption);
+
+        blocksContainer.appendChild(newBlock);
+        blocksContainer.appendChild(buttonContainer);
+        adjustBlockSize(newBlock);  // Adjust the block size based on content
+      };
+      
+      buttonContainer.appendChild(addSeatButton);
+      column.appendChild(buttonContainer);
+
+      document.getElementById('container').appendChild(column);
+      updateCounts();
+    }
+
+    function adjustBlockSize(block) {
+      // Adjust the width and height based on the content inside the block
+      const textLength = block.textContent.length;
+      block.style.width = Math.max(150, textLength * 10) + 'px';  // Adjust width dynamically
+    }
+
+    function showOverlay() {
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      const overlayContent = document.createElement('div');
+      overlayContent.className = 'overlay-content';
+
+      const closeButton = document.createElement('button');
+      closeButton.className = 'close-button';
+      closeButton.innerHTML = '&times;';
+      closeButton.onclick = function() {
+        closeOverlay();
+      };
+      overlayContent.appendChild(closeButton);
+
+      const label = document.createElement('label');
+      label.textContent = 'Enter Registration Number:';
+      overlayContent.appendChild(label);
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = 'regNumber';
+      overlayContent.appendChild(input);
+
+      const submitButton = document.createElement('button');
+      submitButton.textContent = 'Submit';
+      submitButton.onclick = function() {
+        const regNumber = document.getElementById('regNumber').value.trim().toLowerCase();
+        processRegistrationNumber(regNumber);
+      };
+      overlayContent.appendChild(submitButton);
+
+      const qrButton = document.createElement('button');
+      qrButton.textContent = 'Open QR Scanner';
+      qrButton.onclick = function() {
+        openQRScanner();
+      };
+      overlayContent.appendChild(qrButton);
+
+      const qrScannerDiv = document.createElement('div');
+      qrScannerDiv.id = 'qr-scanner';
+      qrScannerDiv.innerHTML = '<video id="video"></video><canvas id="canvas" style="display: none;"></canvas>';
+      overlayContent.appendChild(qrScannerDiv);
+
+      const resultDiv = document.createElement('div');
+      resultDiv.id = 'result';
+      overlayContent.appendChild(resultDiv);
+
+      const registerButton = document.createElement('button');
+      registerButton.textContent = 'Register Student Details';
+      registerButton.style.display = 'none';
+      registerButton.id = 'registerButton';
+      registerButton.onclick = function() {
+        registerStudentDetails();
+      };
+      overlayContent.appendChild(registerButton);
+
+      overlay.appendChild(overlayContent);
+      document.body.appendChild(overlay);
+    }
+
+    function showCheatingOverlay() {
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      const overlayContent = document.createElement('div');
+      overlayContent.className = 'overlay-content';
+
+      const closeButton = document.createElement('button');
+      closeButton.className = 'close-button';
+      closeButton.innerHTML = '&times;';
+      closeButton.onclick = closeOverlay;
+      overlayContent.appendChild(closeButton);
+
+      const label = document.createElement('label');
+      label.textContent = 'Want to Report Cheating for This Student?';
+      overlayContent.appendChild(label);
+
+      const reportButton = document.createElement('button');
+      reportButton.textContent = 'Yes, Report Cheating';
+      reportButton.onclick = reportCheating;
+      overlayContent.appendChild(reportButton);
+
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'delete-button';
+      deleteButton.textContent = 'Delete Previous Student';
+      deleteButton.onclick = function() {
+        showSpinner(); // Show spinner when delete is initiated
+        deletePreviousStudent();
+      };
+      overlayContent.appendChild(deleteButton);
+
+      const closeCheatingOverlayButton = document.createElement('button');
+      closeCheatingOverlayButton.textContent = 'Close';
+      closeCheatingOverlayButton.onclick = closeOverlay;
+      overlayContent.appendChild(closeCheatingOverlayButton);
+
+      overlay.appendChild(overlayContent);
+      document.body.appendChild(overlay);
+    }
+
+    function deletePreviousStudent() {
+      const details = {
+        regNumber: currentRegNumber,
+        rowNumber: currentRowNumber,
+        seatNumber: currentSeatNumber,
+        center: sessionStorage.getItem('selectedCenter'),
+        userName: sessionStorage.getItem('userName'),
+        invigilationType: sessionStorage.getItem('invigilationType'),
+        roomAllotted: sessionStorage.getItem('roomAllotted')
+      };
+
+      google.script.run.withSuccessHandler(function(response) {
+        alert(response);
+        currentBlock.style.backgroundColor = 'lightgrey';
+        currentBlock.textContent = 'Seat ' + currentSeatNumber;
+        hideSpinner(); // Hide spinner after the deletion is confirmed
+        closeOverlay();
+      }).saveDeletion(details); // Use the new function to mark as Deleted
+    }
+
+    function openQRScanner() {
+      const video = document.getElementById('video');
+      const canvasElement = document.getElementById('canvas');
+      const canvas = canvasElement.getContext('2d');
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function(stream) {
+        video.srcObject = stream;
+        video.setAttribute('playsinline', true); 
+        video.style.display = 'block';
+        video.play();
+        requestAnimationFrame(tick);
+      });
+
+      function tick() {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          canvasElement.height = video.videoHeight;
+          canvasElement.width = video.videoWidth;
+          canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+          const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+          const code = jsQR(imageData.data, canvasElement.width, canvasElement.height, {
+            inversionAttempts: 'dontInvert',
+          });
+          if (code) {
+            processRegistrationNumber(code.data.trim().toLowerCase());
+            video.srcObject.getTracks().forEach(track => track.stop());
+          } else {
+            requestAnimationFrame(tick);
+          }
+        } else {
+          requestAnimationFrame(tick);
+        }
+      }
+    }
+
+    function processRegistrationNumber(regNumber) {
+      const resultDiv = document.getElementById('result');
+      const registerButton = document.getElementById('registerButton');
+      resultDiv.innerHTML = '';
+
+      currentRegNumber = regNumber;
+
+      const foundData = data.find(row => String(row[0]).trim().toLowerCase() === regNumber);
+      
+      if (foundData) {
+        const table = document.createElement('table');
+        const headerRow = table.insertRow();
+        const dataRow = table.insertRow();
+
+        const headers = ["Reg No", "Student Name", "Centre/Building Name", "Batch", "Course", "Test Name", "Floor", "Room", "Exam Shift"];
+
+        headers.forEach((header, index) => {
+          const headerCell = headerRow.insertCell();
+          const dataCell = dataRow.insertCell();
+          headerCell.textContent = header;
+          dataCell.textContent = foundData[index];
+        });
+
+        resultDiv.appendChild(table);
+
+        // Check for center name mismatch
+        const selectedCenter = sessionStorage.getItem('selectedCenter');
+        const centerInData = foundData[2]; // Assuming the center name is in the third column
+        if (selectedCenter !== centerInData) {
+          alert(`Center Name mismatch for Registration Number ${regNumber}`);
+          return;
+        }
+
+      } else {
+        resultDiv.textContent = 'Student is Not Eligible As Per Seating Arrangement Data';
+      }
+
+      registerButton.style.display = 'block';
+    }
+
+    function registerStudentDetails() {
+      // Validation for registration number
+      if (!currentRegNumber.startsWith('2') && !currentRegNumber.startsWith('3') || currentRegNumber.length !== 8) {
+        alert('Registration Number Entered Is Incorrect');
+        return;
+      }
+
+      if (scannedValues.has(currentRegNumber)) {
+        alert("Student Already Scanned");
+        return;
+      }
+
+      const foundData = data.find(row => String(row[0]).trim().toLowerCase() === currentRegNumber);
+      const eligibility = foundData ? 'eligible' : 'ineligible';
+
+      showSpinner();
+
+      const details = {
+        regNumber: currentRegNumber,
+        rowNumber: currentRowNumber,
+        seatNumber: currentSeatNumber,
+        eligibility: eligibility,
+        center: sessionStorage.getItem('selectedCenter'),
+        userName: sessionStorage.getItem('userName'),
+        invigilationType: sessionStorage.getItem('invigilationType'), // Save invigilation type
+        roomAllotted: sessionStorage.getItem('roomAllotted') // Save room allotted
+      };
+
+      google.script.run.withSuccessHandler(function(response) {
+        alert(response);
+        hideSpinner();
+        closeOverlay();
+
+        scannedValues.add(currentRegNumber);
+
+        if (foundData) {
+          currentBlock.textContent = `${foundData[0]} ${foundData[1]}`;
+          currentBlock.style.backgroundColor = '#90EE90'; 
+        } else {
+          currentBlock.textContent = currentRegNumber; 
+          currentBlock.style.backgroundColor = '#FFFFE0'; 
+        }
+
+        adjustBlockSize(currentBlock);  // Adjust the block size based on content
+
+        updateCounts();
+      }).saveResponse(details);
+    }
+
+    function reportCheating() {
+      showSpinner();
+      currentBlock.style.backgroundColor = 'red';
+      currentBlock.textContent += ' Cheating Reported';
+
+      const details = {
+        regNumber: currentRegNumber,
+        rowNumber: currentRowNumber,
+        seatNumber: currentSeatNumber,
+        eligibility: 'cheating reported',
+        center: sessionStorage.getItem('selectedCenter'),
+        userName: sessionStorage.getItem('userName'),
+        invigilationType: sessionStorage.getItem('invigilationType'), // Save invigilation type
+        roomAllotted: sessionStorage.getItem('roomAllotted') // Save room allotted
+      };
+
+      google.script.run.withSuccessHandler(function(response) {
+        alert(response);
+        hideSpinner();
+        closeOverlay();
+      }).saveResponse(details);
+    }
+
+    function closeOverlay() {
+      document.querySelector('.overlay').remove();
+    }
+
+    function showSpinner() {
+      const spinnerOverlay = document.createElement('div');
+      spinnerOverlay.className = 'spinner-overlay';
+      spinnerOverlay.id = 'spinner-overlay';
+      spinnerOverlay.innerHTML = `
+        <div class="spinner"></div>
+        <div class="spinner-message">Processing...</div>
+      `;
+      document.body.appendChild(spinnerOverlay);
+      spinnerOverlay.style.display = 'flex'; 
+    }
+
+    function hideSpinner() {
+      const spinnerOverlay = document.getElementById('spinner-overlay');
+      if (spinnerOverlay) {
+        spinnerOverlay.remove();
+      }
+    }
+
+    function updateCounts() {
+      const totalEligible = document.querySelectorAll('.block[style*="background-color: rgb(144, 238, 144);"]').length;
+      const totalIneligible = document.querySelectorAll('.block[style*="background-color: rgb(255, 255, 224);"]').length;
+
+      document.getElementById('totalEligible').textContent = `Total Eligible Scan Count is: ${totalEligible}`;
+      document.getElementById('totalIneligible').textContent = `Total Ineligible Scan Count is: ${totalIneligible}`;
+    }
+
+    // New: Function to save the layout to local storage
+    function saveLayout() {
+      const layout = Array.from(document.querySelectorAll('.column')).map(column => {
+        return {
+          seats: Array.from(column.querySelectorAll('.block')).map(block => {
+            return {
+              text: block.textContent,
+              bgColor: block.style.backgroundColor
+            };
+          })
+        };
+      });
+
+      // Save layout to local storage
+      localStorage.setItem('examLayout', JSON.stringify(layout));
+
+      // Show the "layout getting saved" overlay
+      showSaveOverlay();
+
+      setTimeout(() => {
+        hideSaveOverlay();
+      }, 2000); // Simulate saving delay
+    }
+
+    // New: Show save overlay
+    function showSaveOverlay() {
+      const saveOverlay = document.querySelector('.save-overlay');
+      saveOverlay.style.display = 'flex';
+    }
+
+    // New: Hide save overlay
+    function hideSaveOverlay() {
+      const saveOverlay = document.querySelector('.save-overlay');
+      saveOverlay.style.display = 'none';
+    }
+
+    // New: Restore layout from local storage
+    function restoreLayout() {
+      const savedLayout = JSON.parse(localStorage.getItem('examLayout'));
+      if (savedLayout) {
+        savedLayout.forEach(rowDetails => {
+          addRow(rowDetails);
+        });
+      }
+      updateCounts();
+    }
+
+    // Auto-save the layout every 120 seconds
+    setInterval(saveLayout, 180000);
+
+    function authenticateUser() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const center = document.getElementById('center-dropdown').value;
+      const userName = document.getElementById('user-name').value.trim();
+      const invigilationType = document.getElementById('invigilation-type').value;
+      const roomAllotted = document.getElementById('room-allotted').value.trim();
+
+      if (!username || !password || !center || !userName || !invigilationType || !roomAllotted) {
+        alert('All fields are required!');
+        return;
+      }
+
+      google.script.run.withSuccessHandler(function(authenticated) {
+        if (authenticated) {
+          document.getElementById('login-form').style.display = 'none';
+          document.getElementById('main-content').style.display = 'flex';
+
+          // Save center, user name, invigilation type, and room allotted in session storage
+          sessionStorage.setItem('selectedCenter', center);
+          sessionStorage.setItem('userName', userName);
+          sessionStorage.setItem('invigilationType', invigilationType);
+          sessionStorage.setItem('roomAllotted', roomAllotted);
+
+          const savedLayout = localStorage.getItem('examLayout');
+          if (savedLayout) {
+            const restore = confirm('A saved layout is available. Do you want to restore it?');
+            if (restore) {
+              restoreLayout();
+            }
+          }
+
+          loadData();
+          updateCounts(); 
+        } else {
+          alert('Invalid username or password. Please try again.');
+        }
+      }).authenticateUser(username, password);
+    }
+
+    window.onload = function() {
+      loadData(); // Load all necessary data including Center values
+
+      const statusContainer = document.createElement('div');
+      statusContainer.id = 'status-container';
+      statusContainer.style.margin = '20px';
+      statusContainer.innerHTML = `
+        <div id="totalEligible">Total Eligible Scan Count is: 0</div>
+        <div id="totalIneligible">Total Ineligible Scan Count is: 0</div>
+      `;
+      document.body.insertBefore(statusContainer, document.getElementById('container'));
+    }
+  </script>
+</head>
+<body>
+  <div id="login-form">
+    <h2>Login</h2>
+    <input type="text" id="username" placeholder="Username" />
+    <input type="password" id="password" placeholder="Password" />
+    <select id="center-dropdown">
+      <option value="">Select Center</option>
+    </select>
+    <input type="text" id="user-name" placeholder="Enter Your Name" />
+    <select id="invigilation-type">
+      <option value="">Select Invigilation Type</option>
+      <option value="PW Representation">PW Representation</option>
+      <option value="External Representative">External Representative</option>
+    </select>
+    <input type="text" id="room-allotted" placeholder="Enter Room Allotted" />
+    <button onclick="authenticateUser()">Login</button>
+  </div>
+  <div id="main-content">
+    <div id="status-container">
+      <div id="totalEligible">Total Eligible Scan Count is: 0</div>
+      <div id="totalIneligible">Total Ineligible Scan Count is: 0</div>
+    </div>
+    <button onclick="addRow()">Add Row</button>
+    <div id="container" class="container"></div>
+  </div>
+
+  <!-- New Save Overlay -->
+  <div class="save-overlay">
+    <div class="save-message">Layout Getting Saved...</div>
+  </div>
+</body>
+</html>
+<script src="script.js"></script>
